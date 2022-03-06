@@ -8,9 +8,6 @@ using namespace std;
         cout<<tag<<":::";\
         print_vector(vector);\
     } while(0)
-// typedef unsigned int uint32_t;
-// typedef unsigned short float;
-// typedef unsigned char uint8_t;
 
 #define WavHanderSize  46
 
@@ -190,11 +187,7 @@ int main(int argc, char const *argv[])
     uint16_t buf[SAMPLE_POINT];
     uint16_t buf2[SAMPLE_POINT];
 
-    FILE*fp=fopen("./data/noise.wav","rb");
-    fread(wav_headerM, WavHanderSize, 1, fp);
-    fread(buf,sizeof(uint16_t),filter_order,fp);
-    vector<float>noise(filter_order,0.0F);//(buf,buf+filter_order);
-    fclose(fp);
+    
 
     memset(buf,0,sizeof(buf));
     memset(buf2,0,sizeof(buf2));
@@ -216,7 +209,6 @@ int main(int argc, char const *argv[])
         }
  
         vector<float>capture=input;
-        input=inverse_vector(input);
         float y=sum(input*auto_adapt_filter);//conv_cycle(input,auto_adapt_filter).back();//
         float en=capture.back()-y;//conv_cycle(input,auto_adapt_filter);//capture-auto_adapt_filter*input;
         {
@@ -226,7 +218,7 @@ int main(int argc, char const *argv[])
         }
         printf("%f,",en*en);
         miu=1/(sum(capture*capture)+0.001);
-        auto_adapt_filter=auto_adapt_filter+miu*en*capture;
+        auto_adapt_filter=auto_adapt_filter+miu*en*input;
 
         memset(buf,0,sizeof(buf));
     }

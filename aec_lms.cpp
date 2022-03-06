@@ -238,10 +238,6 @@ int main(int argc, char const *argv[])
 
         // print_vector(auto_adapt_filter);
         memset(buf,0,sizeof(buf));
-        // break;
-        /*****************************************************/
-
-        /******************************************************/
     }
     cout<<"ttt:"<<ttt<<endl;
     fseek(fp_ref,WavHanderSize,SEEK_SET);
