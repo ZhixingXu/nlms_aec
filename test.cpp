@@ -9,6 +9,7 @@ using namespace std;
         print_vector(vector);\
     } while(0)
 
+
 #define WavHanderSize  46
 
 static char wav_headerM[WavHanderSize];
@@ -100,7 +101,7 @@ vector<T> conv_cycle(const vector<T>&num1,const vector<T>&num2){
     int offset=ans.size()-len;
     for (int i = ans.size()-1; i >= len; i--)
     {
-        ans[i-len]+=ans[i];
+        // ans[i-len]+=ans[i];
         ans.pop_back();
     }
     
@@ -165,94 +166,81 @@ uint16_t big2little(uint16_t num){
 
 int main(int argc, char const *argv[])
 {
-    if(argc!=4){
+    if(argc!=5){
         cout<<"para is not enough:./aec_v1 ./data/mic.wav ./data/ref.wav ./data/shuai.wav"<<endl;
         return 0;
     }
- 
-    FILE *fp_mic = fopen(argv[1], "rb");//mic.wav
-    FILE *fp_ref = fopen(argv[2], "rb");//ref.wav
-    FILE *fp_aec = fopen(argv[3], "wb");//output
-    if(!fp_aec||!fp_ref||!fp_aec){
+
+
+    FILE *fp_sound1 = fopen(argv[1], "rb");//mic.wav
+    FILE *fp_sound2 = fopen(argv[2], "rb");//ref.wav
+    FILE *fp_mic = fopen(argv[3], "wb");//output
+    FILE *fp_ref = fopen(argv[4], "wb");
+    if(!fp_mic||!fp_sound2||!fp_mic){
         return 0;
     }
     // 读取wav文件头信息
-	fread(wav_headerM, WavHanderSize, 1, fp_mic);
-	fread(wav_headerR, WavHanderSize, 1, fp_ref);
-	fwrite(wav_headerM, WavHanderSize, 1, fp_aec);
+	fread(wav_headerM, WavHanderSize, 1, fp_sound1);
+	fread(wav_headerR, WavHanderSize, 1, fp_sound2);
+	fwrite(wav_headerM, WavHanderSize, 1, fp_mic);
+    fwrite(wav_headerM, WavHanderSize, 1, fp_ref);
 
-    #define SAMPLE_POINT 8*4
-    const int filter_order=SAMPLE_POINT;
-    float miu=0;
+    #define SAMPLE_POINT 8*2
+    #define FILTER_ORDER SAMPLE_POINT
+
     uint16_t buf[SAMPLE_POINT];
     uint16_t buf2[SAMPLE_POINT];
-
-    
 
     memset(buf,0,sizeof(buf));
     memset(buf2,0,sizeof(buf2));
 
-    vector<float>auto_adapt_filter(filter_order,float(0));
-    print_vector(auto_adapt_filter);
+    vector<float>echo_path_filter={0.        , 0.04322727, 0.1654347 , 0.3454915 , 0.55226423,
+       0.75      , 0.9045085 , 0.9890738 , 0.9890738 , 0.9045085 ,
+       0.75      , 0.55226423, 0.3454915 , 0.1654347 , 0.04322727,
+       0};
+    print_vector(echo_path_filter);
     //
     static int ttt=0;
     
-
-    while (fread(buf,sizeof(uint16_t),filter_order,fp_ref)==filter_order)
+    
+    // echo_path_filter=inverse_vector(echo_path_filter);
+    while (fread(buf,sizeof(uint16_t),FILTER_ORDER,fp_sound1)==FILTER_ORDER)
     {
-        fseek(fp_ref,(1-filter_order)*sizeof(uint16_t),SEEK_CUR);
-
-        vector<float>input;//(buf,buf+filter_order);
-        for (int i = 0; i < filter_order; i++)
-        {
-            input.push_back(float(little2big(buf[i]))/65536);
-        }
- 
-        vector<float>capture=input;
-        
-        // print_vector(capture);
-        input=inverse_vector(input);
-        // print_vector(input);
-
-        
-        float y=sum(input*auto_adapt_filter);//conv_cycle(input,auto_adapt_filter).back();//
-        float en=capture.back()-y;//conv_cycle(input,auto_adapt_filter);//capture-auto_adapt_filter*input;
-
-        miu=1/(sum(capture*capture)+0.001);
-        auto_adapt_filter=auto_adapt_filter+miu*en*input;
-
-        memset(buf,0,sizeof(buf));
-    }
-    fseek(fp_ref,WavHanderSize,SEEK_SET);
-    LOGV("auto_adapt_filter",auto_adapt_filter);
-    cout<<endl;
-    // auto_adapt_filter=inverse_vector(auto_adapt_filter);
-    while (fread(buf,sizeof(uint16_t),filter_order,fp_mic)==filter_order)
-    {
-        vector<float>input;//(buf,buf+filter_order);
-        for (int i = 0; i < filter_order; i++)
+        vector<float>input;//(buf,buf+FILTER_ORDER);
+        for (int i = 0; i < FILTER_ORDER; i++)
         {
             input.push_back(float(little2big(buf[i]))/65536);
         }
         //
-        fread(buf2,sizeof(uint16_t),filter_order,fp_ref);
-        vector<float>farend;//(buf2,buf2+filter_order);
-        for (int i = 0; i < filter_order; i++)
+        if(fread(buf2,sizeof(uint16_t),FILTER_ORDER,fp_sound2)<1)
+            break;
+        
+        vector<float>farend;//(buf2,buf2+FILTER_ORDER);
+        for (int i = 0; i < FILTER_ORDER; i++)
         {
             farend.push_back(float(little2big(buf2[i]))/65536);
         }
-        vector<float>out=input-conv_cycle(farend,auto_adapt_filter);//farend*auto_adapt_filter;//
 
-        uint16_t dat[filter_order];
-        for (int i = 0; i < filter_order; i++)
+        vector<float>echo_path=0.73*farend;//conv_cycle(farend, echo_path_filter);//
+        vector<float>out = input + echo_path;//
+
+        uint16_t dat[FILTER_ORDER];
+        for (int i = 0; i < FILTER_ORDER; i++)
         {
             dat[i]=big2little(uint16_t(out[i]*65536));
         }
-        fwrite(dat,sizeof(uint16_t),filter_order,fp_aec);
+        fwrite(dat,sizeof(uint16_t),FILTER_ORDER,fp_mic);
+
+        for (int i = 0; i < FILTER_ORDER; i++)
+        {
+            dat[i]=big2little(uint16_t(echo_path[i]*65536));
+        }
+        fwrite(dat,sizeof(uint16_t),FILTER_ORDER,fp_ref);
 
     }
+    fclose(fp_sound1 );
+    fclose(fp_sound2 );
     fclose(fp_mic );
-    fclose(fp_ref );
-    fclose(fp_aec );
+    fclose(fp_ref);
     return 0;
 }

@@ -166,13 +166,7 @@ uint16_t big2little(uint16_t num){
 
 int main(int argc, char const *argv[])
 {
-    // vector<int>num1={-1,-2,3,4,5};
-    // vector<int>num2={3,5,1,-3,-1};
-    // vector<int>ans=num2+num1;//conv_cycle(num1,num2);
-    // print_vector(ans);
-    // return 0;
-
-    if(argc!=4){
+    if(argc!=5){
         cout<<"para is not enough:./aec_v1 ./data/mic.wav ./data/ref.wav ./data/shuai.wav"<<endl;
         return 0;
     }
@@ -180,17 +174,19 @@ int main(int argc, char const *argv[])
 
     FILE *fp_mic = fopen(argv[1], "rb");//mic.wav
     FILE *fp_ref = fopen(argv[2], "rb");//ref.wav
-    FILE *fp_aec = fopen(argv[3], "wb");//output
+    FILE *fp_exp = fopen(argv[3], "rb");//exp.wav
+    FILE *fp_aec = fopen(argv[4], "wb");//output
     if(!fp_aec||!fp_ref||!fp_aec){
         return 0;
     }
     // 读取wav文件头信息
 	fread(wav_headerM, WavHanderSize, 1, fp_mic);
 	fread(wav_headerR, WavHanderSize, 1, fp_ref);
+    fread(wav_headerR, WavHanderSize, 1, fp_exp);
 	fwrite(wav_headerM, WavHanderSize, 1, fp_aec);
 
-    #define SAMPLE_POINT 8*2
-    int filter_order=SAMPLE_POINT;
+    #define SAMPLE_POINT 8
+    const int filter_order=SAMPLE_POINT;
     float miu=0.02;
     uint16_t buf[SAMPLE_POINT];
     uint16_t buf2[SAMPLE_POINT];
@@ -200,50 +196,42 @@ int main(int argc, char const *argv[])
 
     vector<float>auto_adapt_filter(filter_order,float(0));
     print_vector(auto_adapt_filter);
-    //
-    static int ttt=0;
-    
-    //
+
     while (fread(buf,sizeof(uint16_t),filter_order,fp_ref)==filter_order)
     {
-        fseek(fp_ref,(1-filter_order)*sizeof(uint16_t),SEEK_CUR);
-
+        // fseek(fp_ref,(1-filter_order)*sizeof(uint16_t),SEEK_CUR);
+        //reference signal in farend
         vector<float>input;
         for (int i = 0; i < filter_order; i++)
         {
             input.push_back(float(little2big(buf[i]))/65536);
         }
 
-
-
-        vector<float>capture=input;
-        float y=sum(input*auto_adapt_filter);//conv(input,auto_adapt_filter).back();//
-        float en=capture.back()-y;//conv_cycle(input,auto_adapt_filter);//capture-auto_adapt_filter*input;
+        //expected signal,captured by mic
+        fread(buf,sizeof(uint16_t),filter_order,fp_exp);
+        // fseek(fp_exp,(1-filter_order)*sizeof(uint16_t),SEEK_CUR);
+        vector<float>expect;
+        for (int i = 0; i < filter_order; i++)
         {
-            if(3000==ttt)
-                break;
-            if(ttt<-3000){
-                LOGV("filter_new",auto_adapt_filter);
-                printf("**************\nen:%f\n",en);
-                LOGV("input",input);
-                LOGV("filter",auto_adapt_filter);
-            }
-            ttt++;
+            expect.push_back(float(little2big(buf[i]))/65536);
         }
-        printf("%f,",en*en);
-        // if(ttt==3000)
-        //     break;
-        // print_vector(en);
+        //start....>>>
+        vector<float>capture=expect;
+
+        input=inverse_vector(input);
+        
+        float y=sum(input*auto_adapt_filter);
+        float en=capture.back()-y;//conv_cycle(input,auto_adapt_filter);//capture-auto_adapt_filter*input;
+        // cout<<en<<',';
+        // input=inverse_vector(input);
         auto_adapt_filter=auto_adapt_filter+2*miu*en*input;
 
         // print_vector(auto_adapt_filter);
         memset(buf,0,sizeof(buf));
     }
-    cout<<"ttt:"<<ttt<<endl;
+    cout<<endl;
     fseek(fp_ref,WavHanderSize,SEEK_SET);
     LOGV("auto_adapt_filter",auto_adapt_filter);
-    ttt=0;
-
     cout<<endl;
     // auto_adapt_filter=inverse_vector(auto_adapt_filter);
     while (fread(buf,sizeof(uint16_t),filter_order,fp_mic)==filter_order)
@@ -259,11 +247,6 @@ int main(int argc, char const *argv[])
         for (int i = 0; i < filter_order; i++)
         {
             farend.push_back(float(little2big(buf2[i]))/65536);
-        }
-        if(ttt<0){
-            ttt++;
-            LOGV("farend:::",farend);
-            LOGV("input:::",input);
         }
 #if 1
 
