@@ -1,22 +1,15 @@
-src_lms := ./aec_lms.cpp
+CC = g++
 src_nlms := ./aec_nlms.cpp
-test := ./test.cpp
+EXE = ./nlms
+LINK = -IInclude -L./Lib -lwav 
 
 
-lms:$(src_lms)
-	g++ $^ -o lms
+.PHONY: run
+run:$(EXE) 
+	LD_LIBRARY_PATH=./Lib ./$^ ./wave/far_end.wav ./wave/echo.wav ./wave/mic_with_echo.wav ./wave/mic_remove_echo.wav
 
-nlms:$(src_nlms)
-	g++ $^ -o nlms
+$(EXE):$(src_nlms)
+	$(CC) $^ -o $@ $(LINK)
 
-test:$(test)
-	g++ $^ -o test
-
-run_lms:lms
-	./lms ./wave/mic.wav ./wave/girl.wav ./wave/expect.wav ./wave/lms_out.wav
-
-run_nlms:nlms
-	./nlms ./wave/tog.wav ./wave/girl.wav ./wave/nlms_out.wav
-
-run_test:test
-	./test ./wave/boy.wav ./wave/girl.wav ./wave/mic.wav ./wave/expect.wav
+clean:
+	rm $(EXE)

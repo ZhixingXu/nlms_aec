@@ -50,6 +50,11 @@ float updata_miu(short*buf,int len){
 
 int main(int argc, char const *argv[])
 {
+    if(argc!=5){
+        printf("parameter err\n");
+        printf("e.g. ./nlms ./wave/far_end.wav ./wave/echo.wav ./wave/mic_with_echo.wav ./wave/mic_remove_echo.wav\n");
+        return 0;
+    }
     wav_reader sig(argv[1]);
     wav_reader echo(argv[2]);
     wav_reader sig_with_echo(argv[3]);
@@ -76,7 +81,6 @@ int main(int argc, char const *argv[])
     }
     
     list<short>buffer;
-    int tmp_cnt=0;
     while (1)
     {
         int cnt1;
@@ -97,7 +101,6 @@ int main(int argc, char const *argv[])
         for (int i = 0; i < filter_order; i++)
         {
             buf1[i]=*tmp;
-            // printf("%d--",buf1[i]);
             tmp++;
         }
       
@@ -106,18 +109,13 @@ int main(int argc, char const *argv[])
         float error=buf2[0]-estimate_echo;
         // 根据信号能量更新步长因子
         miu=updata_miu(buf1,filter_order);
-        // printf("%.5f,",error);
         // 更新自适应滤波器
         for (int i = 0; i < filter_order; i++)
         {
             filter[i]+=miu*error*buf1[filter_order-1-i];
         }
-        tmp_cnt++;
-        // if(tmp_cnt++>32)
-        //     break;
         buffer.pop_front();
     }
-    // printf("\n\n\ncycle:%d\n",tmp_cnt);
     
     for (int i = 0; i < filter_order; i++)
     {
@@ -128,7 +126,7 @@ int main(int argc, char const *argv[])
     // 2.去除回声
     sig.~wav_reader();
     wav_reader ref(argv[1]);
-    wav_writer out("./wave2/remove_echo.wav",
+    wav_writer out(argv[4],
                     ref.get_channels(),
                     ref.get_sample_rate(),
                     ref.get_sample_width());
