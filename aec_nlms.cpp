@@ -1,258 +1,173 @@
 #include <iostream>
 #include <vector>
+#include <cfloat>
+#include <cmath>
 #include <string.h>
+#include <list>
+
+#include "wav.h"
 using namespace std;
-#define LOGV(tag,vector) \
-    do \
-    {\
-        cout<<tag<<":::";\
-        print_vector(vector);\
-    } while(0)
-
-#define WavHanderSize  46
-
-static char wav_headerM[WavHanderSize];
-static char wav_headerR[WavHanderSize];
-template <typename T>
-vector<T> operator+(const vector<T> &a, const vector<T> &b)
-{
-    if (a.size() != b.size())
+template<typename T1,typename T2>
+float conv(T1*buf1,int len1,T2*buf2,int len2){
+    float ans=0;
+    for (int i = 0; i < len1; i++)
     {
-        cout<<"+error"<<endl;
-        exit(-1);
+        // ans+=buf1[i]*
+        if(len1-len2>0 && i<len1-len2)
+            continue;
+        ans+=buf1[i]*buf2[len1-i-1];
     }
-    
-    vector<T> re;
-    for (uint i = 0; i < a.size(); i++)
-    {
-        re.push_back(a[i] + b[i]);
-    }
-    return re;
+    return ans;
 }
-template <typename T>
-vector<T> operator+(const vector<T> &a, float n)
-{
-    vector<T> re;
-    for (uint i = 0; i < a.size(); i++)
+template<typename T1,typename T2>
+void special_print(T1*buf1,int len1,T2*buf2,int len2,float ans){
+    cout<<'[';
+    for (int i = 0; i < len1; i++)
     {
-        re.push_back(a[i] + n);
+        cout<<buf1[i];
+        char ch=i==len1-1?']':',';
+        cout<<ch;
     }
-    return re;
-}
-template <typename T>
-vector<T> operator*(const vector<T> &a, const vector<T> &b)
-{
-    if (a.size() != b.size())
+    cout<<',';
+    cout<<'[';
+    for (int i = 0; i < len2; i++)
     {
-        cout<<"*error"<<endl;
-        exit(-1);
+        cout<<buf2[i];
+        char ch=i==len2-1?']':',';
+        cout<<ch;
     }
-    
-    vector<T> re;
-    for (uint i = 0; i < a.size(); i++)
-    {
-        re.push_back(a[i] * b[i]);
-    }
-    return re;
-}
-template <typename T>
-vector<T> operator*(const float n, const vector<T> &b)
-{
-    vector<T> re;
-    for (uint i = 0; i < b.size(); i++)
-    {
-        re.push_back(n * b[i]);
-    }
-    return re;
-}
-template <typename T>
-vector<T> operator-(const vector<T> &a, const vector<T> &b)
-{
-    if (a.size() != b.size())
-    {
-        cout<<"error"<<endl;
-        exit(-1);
-    }
-    int min=a.size() > b.size()?b.size():a.size();
-    vector<T> re;
-    for (uint i = 0; i < min; i++)
-    {
-        re.push_back(a[i] - b[i]);
-    }
-    return re;
-}
-template <typename T>
-vector<T> conv_cycle(const vector<T>&num1,const vector<T>&num2){
-	int n = num1.size()+num2.size()-1;
-    vector<T>ans(n,0);
-    // cout<<ans.size()<<endl;
-    for (int i = num2.size()-1; i >= 0; i--)
-    {
-        int start=ans.size()-num1.size()-num2.size()+1+i;//num2.size()-i;
-        // cout<<"start:"<<start<<endl;
-        for (int j = start; j < start + num1.size(); j++)
-        {
-            ans[j]+=num2[i]*num1[j-start];
-        }
-        
-    }
-    int len=num1.size();
-    int offset=ans.size()-len;
-    for (int i = ans.size()-1; i >= len; i--)
-    {
-        ans[i-len]+=ans[i];
-        ans.pop_back();
-    }
-    
-    //shuai
-	return ans;
-}
-template <typename T>
-vector<T> conv(const vector<T>&num1,const vector<T>&num2){
-	int n = num1.size()+num2.size()-1;
-    vector<T>ans(n,0);
-    // cout<<ans.size()<<endl;
-    for (int i = num2.size()-1; i >= 0; i--)
-    {
-        int start=ans.size()-num1.size()-num2.size()+1+i;//num2.size()-i;
-        // cout<<"start:"<<start<<endl;
-        for (int j = start; j < start + num1.size(); j++)
-        {
-            ans[j]+=num2[i]*num1[j-start];
-        }
-        
-    }
-    while(ans.size()>num1.size()){
-        ans.pop_back();
-    }
-	return ans;
-}
-template <typename T>
-T sum(vector<T>num){
-    T sum=0;
-    for (int i = 0; i < num.size(); i++)
-    {
-        sum+=num[i];
-    }
-    return sum;
-}
-template <typename T>
-vector<T>& inverse_vector(vector<T>&num){
-    for (int i = 0; i < num.size()/2; i++)
-    {
-        T tmp=num[i];
-        num[i]=num[num.size()-1-i];
-        num[num.size()-1-i]=tmp;
-    }
-    return num;
-}
-template <typename T>
-void print_vector(vector<T>&num){
-    for (int i = 0; i < num.size(); i++)
-    {
-        cout<<num[i]<<",";
-    }
+    cout<<"="<<ans;
     cout<<endl;
-    
 }
-//little end to big end
-uint16_t little2big(uint16_t num){
-    return num;//((num&0xff)<<8)|((num&0xff00)>>8);
-}
-uint16_t big2little(uint16_t num){
-    return num;//((num&0xff)<<8)|((num&0xff00)>>8);
+float updata_miu(short*buf,int len){
+    float energy=0.0001;
+    for (int i = 0; i < len; i++)
+    {
+        energy+=buf[i]*buf[i];
+    }
+    return 0.04/energy;
 }
 
 int main(int argc, char const *argv[])
 {
-    if(argc!=4){
-        cout<<"para is not enough:./aec_v1 ./data/mic.wav ./data/ref.wav ./data/shuai.wav"<<endl;
-        return 0;
-    }
- 
-    FILE *fp_mic = fopen(argv[1], "rb");//mic.wav
-    FILE *fp_ref = fopen(argv[2], "rb");//ref.wav
-    FILE *fp_aec = fopen(argv[3], "wb");//output
-    if(!fp_aec||!fp_ref||!fp_aec){
-        return 0;
-    }
-    // 读取wav文件头信息
-	fread(wav_headerM, WavHanderSize, 1, fp_mic);
-	fread(wav_headerR, WavHanderSize, 1, fp_ref);
-	fwrite(wav_headerM, WavHanderSize, 1, fp_aec);
+    wav_reader sig(argv[1]);
+    wav_reader echo(argv[2]);
+    wav_reader sig_with_echo(argv[3]);
+   
+    int filter_order=16;
+    short*buf1=new short[filter_order];
+    short*buf2=new short[filter_order];
+    short*buf3=new short[filter_order];
+    float miu;
 
-    #define SAMPLE_POINT 8*4
-    const int filter_order=SAMPLE_POINT;
-    float miu=0;
-    uint16_t buf[SAMPLE_POINT];
-    uint16_t buf2[SAMPLE_POINT];
-
+    // for (int i = 0; i < filter_order; i++)
+    // {
+    //     short tmp;
+    //     echo.get_data((char*)&tmp,NULL,2);
+    //     sig_with_echo.get_data((char*)&tmp,NULL,2);
+    // }
     
-
-    memset(buf,0,sizeof(buf));
-    memset(buf2,0,sizeof(buf2));
-
-    vector<float>auto_adapt_filter(filter_order,float(0));
-    print_vector(auto_adapt_filter);
-    //
-    static int ttt=0;
     
-
-    while (fread(buf,sizeof(uint16_t),filter_order,fp_ref)==filter_order)
+    // 1. 构造自适应滤波器
+    float*filter=new float[filter_order];
+    for (int i = 0; i < filter_order; i++)
     {
-        fseek(fp_ref,(1-filter_order)*sizeof(uint16_t),SEEK_CUR);
-
-        vector<float>input;//(buf,buf+filter_order);
-        for (int i = 0; i < filter_order; i++)
-        {
-            input.push_back(float(little2big(buf[i]))/65536);
-        }
- 
-        vector<float>capture=input;
-        
-        // print_vector(capture);
-        input=inverse_vector(input);
-        // print_vector(input);
-
-        
-        float y=sum(input*auto_adapt_filter);//conv_cycle(input,auto_adapt_filter).back();//
-        float en=capture.back()-y;//conv_cycle(input,auto_adapt_filter);//capture-auto_adapt_filter*input;
-
-        miu=1/(sum(capture*capture)+0.001);
-        auto_adapt_filter=auto_adapt_filter+miu*en*input;
-
-        memset(buf,0,sizeof(buf));
+        filter[i]=0;
     }
-    fseek(fp_ref,WavHanderSize,SEEK_SET);
-    LOGV("auto_adapt_filter",auto_adapt_filter);
-    cout<<endl;
-    // auto_adapt_filter=inverse_vector(auto_adapt_filter);
-    while (fread(buf,sizeof(uint16_t),filter_order,fp_mic)==filter_order)
+    
+    list<short>buffer;
+    int tmp_cnt=0;
+    while (1)
     {
-        vector<float>input;//(buf,buf+filter_order);
+        int cnt1;
+        if(buffer.size()<filter_order){
+            cnt1=sig.get_data((char*)buf1,NULL,filter_order*2);
+            for (int i = 0; i < cnt1/2; i++)
+            {
+                buffer.push_back(buf1[i]);
+            }
+            if(0==cnt1)
+                break;
+        }
+        
+        int cnt2=echo.get_data((char*)buf2,NULL,2);
+        if(cnt2==0)
+            break;
+        auto tmp=buffer.cbegin();
         for (int i = 0; i < filter_order; i++)
         {
-            input.push_back(float(little2big(buf[i]))/65536);
+            buf1[i]=*tmp;
+            // printf("%d--",buf1[i]);
+            tmp++;
         }
-        //
-        fread(buf2,sizeof(uint16_t),filter_order,fp_ref);
-        vector<float>farend;//(buf2,buf2+filter_order);
+      
+        float estimate_echo=conv(buf1,filter_order,filter,filter_order);///65536;
+        // special_print(buf1,filter_order,filter,filter_order,estimate_echo);
+        float error=buf2[0]-estimate_echo;
+        // 根据信号能量更新步长因子
+        miu=updata_miu(buf1,filter_order);
+        // printf("%.5f,",error);
+        // 更新自适应滤波器
         for (int i = 0; i < filter_order; i++)
         {
-            farend.push_back(float(little2big(buf2[i]))/65536);
+            filter[i]+=miu*error*buf1[filter_order-1-i];
         }
-        vector<float>out=input-conv_cycle(farend,auto_adapt_filter);//farend*auto_adapt_filter;//
-
-        uint16_t dat[filter_order];
-        for (int i = 0; i < filter_order; i++)
-        {
-            dat[i]=big2little(uint16_t(out[i]*65536));
-        }
-        fwrite(dat,sizeof(uint16_t),filter_order,fp_aec);
-
+        tmp_cnt++;
+        // if(tmp_cnt++>32)
+        //     break;
+        buffer.pop_front();
     }
-    fclose(fp_mic );
-    fclose(fp_ref );
-    fclose(fp_aec );
+    // printf("\n\n\ncycle:%d\n",tmp_cnt);
+    
+    for (int i = 0; i < filter_order; i++)
+    {
+        printf("%f,",filter[i]);
+    }
+    printf("\n");
+
+    // 2.去除回声
+    sig.~wav_reader();
+    wav_reader ref(argv[1]);
+    wav_writer out("./wave2/remove_echo.wav",
+                    ref.get_channels(),
+                    ref.get_sample_rate(),
+                    ref.get_sample_width());
+    buffer.clear();
+    while (1)
+    {
+        int cnt1;
+        if(buffer.size()<filter_order){
+            cnt1=ref.get_data((char*)buf1,NULL,filter_order*2);
+            for (int i = 0; i < cnt1/2; i++)
+            {
+                buffer.push_back(buf1[i]);
+                // printf("%d->",buf1[i]);
+            }
+            // printf("\n");
+            if(0==cnt1)
+                break;
+        }
+        
+        int cnt2=sig_with_echo.get_data((char*)buf2,NULL,2);
+        if(cnt2==0)
+            break;
+        auto tmp=buffer.cbegin();
+        for (int i = 0; i < filter_order; i++)
+        {
+            buf1[i]=*tmp;
+            // printf("%d--",buf1[i]);
+            tmp++;
+        }
+        float estimate_echo=conv(buf1,filter_order,filter,filter_order);
+        short ans=buf2[0]-estimate_echo;
+        
+        out.write_data((char*)&ans,NULL,2);
+        
+        buffer.pop_front();
+    }
+
+    delete buf1;
+    delete buf2;
+    delete buf3;
     return 0;
 }
