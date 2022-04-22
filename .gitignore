@@ -2,3 +2,5 @@
 *.log
 wav_useless
 .vscode
+wave2
+nlms

@@ -59,21 +59,20 @@ int main(int argc, char const *argv[])
     wav_reader echo(argv[2]);
     wav_reader sig_with_echo(argv[3]);
    
-    int filter_order=16;
+    int filter_order=8*8;
     short*buf1=new short[filter_order];
     short*buf2=new short[filter_order];
     short*buf3=new short[filter_order];
     float miu;
-
-    // for (int i = 0; i < filter_order; i++)
-    // {
-    //     short tmp;
-    //     echo.get_data((char*)&tmp,NULL,2);
-    //     sig_with_echo.get_data((char*)&tmp,NULL,2);
-    // }
+    // 由于回声有延时，这里做一些延时处理，延时了0.2s，正常情况下不会有这么长的延时，这里只是因为测试文件是我特意做的。
+    for (int i = 0; i < 0.2*16000; i++)
+    {
+        short tmp;
+        echo.get_data((char*)&tmp,NULL,2);
+        sig_with_echo.get_data((char*)&tmp,NULL,2);
+    }
     
-    
-    // 1. 构造自适应滤波器
+    //  构造自适应滤波器
     float*filter=new float[filter_order];
     for (int i = 0; i < filter_order; i++)
     {
@@ -93,37 +92,37 @@ int main(int argc, char const *argv[])
             if(0==cnt1)
                 break;
         }
-        
-        int cnt2=echo.get_data((char*)buf2,NULL,2);
-        if(cnt2==0)
-            break;
         auto tmp=buffer.cbegin();
         for (int i = 0; i < filter_order; i++)
         {
             buf1[i]=*tmp;
             tmp++;
         }
-      
-        float estimate_echo=conv(buf1,filter_order,filter,filter_order);///65536;
-        // special_print(buf1,filter_order,filter,filter_order,estimate_echo);
+        //1.估计回声
+        float estimate_echo=conv(buf1,filter_order,filter,filter_order);
+        
+        int cnt2=echo.get_data((char*)buf2,NULL,2);
+        if(cnt2==0)
+            break;
+        // 2. 计算误差
         float error=buf2[0]-estimate_echo;
-        // 根据信号能量更新步长因子
+        // 3.根据信号能量更新步长因子
         miu=updata_miu(buf1,filter_order);
-        // 更新自适应滤波器
+        // 4.更新自适应滤波器
         for (int i = 0; i < filter_order; i++)
         {
             filter[i]+=miu*error*buf1[filter_order-1-i];
         }
         buffer.pop_front();
     }
-    
+    printf("\n\n\n");
     for (int i = 0; i < filter_order; i++)
     {
         printf("%f,",filter[i]);
     }
     printf("\n");
 
-    // 2.去除回声
+    // 去除回声
     sig.~wav_reader();
     wav_reader ref(argv[1]);
     wav_writer out(argv[4],
@@ -167,5 +166,6 @@ int main(int argc, char const *argv[])
     delete buf1;
     delete buf2;
     delete buf3;
+    delete filter;
     return 0;
 }
